@@ -1,0 +1,457 @@
+/*
+This single file includes all necessary classes, services, data context, controllers, and the main program setup for the Library Management System. The content is organized as follows:
+
+Models:
+
+Book: Represents a book in the library.
+Member: Represents a member of the library.
+Issue: Represents a book issue record.
+
+Data:
+
+LibraryContext: The Entity Framework Core data context that manages the database operations.
+Services:
+
+BookService: Handles CRUD operations for books.
+MemberService: Handles CRUD operations for members.
+
+IssueService: Handles CRUD operations for book issues.
+
+Controllers:
+
+BooksController: API endpoints for managing books.
+MembersController: API endpoints for managing members.
+IssuesController: API endpoints for managing book issues.
+
+Program:
+
+Program: The main entry point of the application.
+Startup: Configures services and the application's request pipeline.
+
+*/
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+// Models
+namespace LibraryManagementSystem.Models
+{
+    public class Book
+    {
+        public string UId { get; set; }
+        public string Title { get; set; }
+        public string Author { get; set; }
+        public DateTime PublishedDate { get; set; }
+        public string ISBN { get; set; }
+        public bool IsIssued { get; set; }
+    }
+
+    public class Member
+    {
+        public string UId { get; set; }
+        public string Name { get; set; }
+        public DateTime DateOfBirth { get; set; }
+        public string Email { get; set; }
+    }
+
+    public class Issue
+    {
+        public string UId { get; set; }
+        public string BookId { get; set; }
+        public string MemberId { get; set; }
+        public DateTime IssueDate { get; set; }
+        public DateTime? ReturnDate { get; set; }
+        public bool IsReturned { get; set; }
+    }
+}
+
+// Data
+namespace LibraryManagementSystem.Data
+{
+    public class LibraryContext : DbContext
+    {
+        public LibraryContext(DbContextOptions<LibraryContext> options) : base(options) { }
+
+        public DbSet<LibraryManagementSystem.Models.Book> Books { get; set; }
+        public DbSet<LibraryManagementSystem.Models.Member> Members { get; set; }
+        public DbSet<LibraryManagementSystem.Models.Issue> Issues { get; set; }
+    }
+}
+
+// Services
+namespace LibraryManagementSystem.Services
+{
+    public class BookService
+    {
+        private readonly LibraryManagementSystem.Data.LibraryContext _context;
+
+        public BookService(LibraryManagementSystem.Data.LibraryContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<LibraryManagementSystem.Models.Book> AddBookAsync(LibraryManagementSystem.Models.Book book)
+        {
+            book.UId = Guid.NewGuid().ToString();
+            _context.Books.Add(book);
+            await _context.SaveChangesAsync();
+            return book;
+        }
+
+        public async Task<LibraryManagementSystem.Models.Book> GetBookByIdAsync(string uid)
+        {
+            return await _context.Books.FindAsync(uid);
+        }
+
+        public async Task<IEnumerable<LibraryManagementSystem.Models.Book>> GetBooksByNameAsync(string name)
+        {
+            return await _context.Books.Where(b => b.Title.Contains(name)).ToListAsync();
+        }
+
+        public async Task<IEnumerable<LibraryManagementSystem.Models.Book>> GetAllBooksAsync()
+        {
+            return await _context.Books.ToListAsync();
+        }
+
+        public async Task<IEnumerable<LibraryManagementSystem.Models.Book>> GetAvailableBooksAsync()
+        {
+            return await _context.Books.Where(b => !b.IsIssued).ToListAsync();
+        }
+
+        public async Task<IEnumerable<LibraryManagementSystem.Models.Book>> GetIssuedBooksAsync()
+        {
+            return await _context.Books.Where(b => b.IsIssued).ToListAsync();
+        }
+
+        public async Task<LibraryManagementSystem.Models.Book> UpdateBookAsync(LibraryManagementSystem.Models.Book book)
+        {
+            _context.Entry(book).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return book;
+        }
+    }
+
+    public class MemberService
+    {
+        private readonly LibraryManagementSystem.Data.LibraryContext _context;
+
+        public MemberService(LibraryManagementSystem.Data.LibraryContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<LibraryManagementSystem.Models.Member> AddMemberAsync(LibraryManagementSystem.Models.Member member)
+        {
+            member.UId = Guid.NewGuid().ToString();
+            _context.Members.Add(member);
+            await _context.SaveChangesAsync();
+            return member;
+        }
+
+        public async Task<LibraryManagementSystem.Models.Member> GetMemberByIdAsync(string uid)
+        {
+            return await _context.Members.FindAsync(uid);
+        }
+
+        public async Task<IEnumerable<LibraryManagementSystem.Models.Member>> GetAllMembersAsync()
+        {
+            return await _context.Members.ToListAsync();
+        }
+
+        public async Task<LibraryManagementSystem.Models.Member> UpdateMemberAsync(LibraryManagementSystem.Models.Member member)
+        {
+            _context.Entry(member).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return member;
+        }
+    }
+
+    public class IssueService
+    {
+        private readonly LibraryManagementSystem.Data.LibraryContext _context;
+
+        public IssueService(LibraryManagementSystem.Data.LibraryContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<LibraryManagementSystem.Models.Issue> IssueBookAsync(LibraryManagementSystem.Models.Issue issue)
+        {
+            issue.UId = Guid.NewGuid().ToString();
+            _context.Issues.Add(issue);
+
+            var book = await _context.Books.FindAsync(issue.BookId);
+            if (book != null)
+            {
+                book.IsIssued = true;
+                _context.Books.Update(book);
+            }
+
+            await _context.SaveChangesAsync();
+            return issue;
+        }
+
+        public async Task<LibraryManagementSystem.Models.Issue> GetIssueByIdAsync(string uid)
+        {
+            return await _context.Issues.FindAsync(uid);
+        }
+
+        public async Task<IEnumerable<LibraryManagementSystem.Models.Issue>> GetAllIssuesAsync()
+        {
+            return await _context.Issues.ToListAsync();
+        }
+
+        public async Task<LibraryManagementSystem.Models.Issue> UpdateIssueAsync(LibraryManagementSystem.Models.Issue issue)
+        {
+            _context.Entry(issue).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return issue;
+        }
+    }
+}
+
+// Controllers
+namespace LibraryManagementSystem.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class BooksController : ControllerBase
+    {
+        private readonly LibraryManagementSystem.Services.BookService _bookService;
+
+        public BooksController(LibraryManagementSystem.Services.BookService bookService)
+        {
+            _bookService = bookService;
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<LibraryManagementSystem.Models.Book>> AddBook(LibraryManagementSystem.Models.Book book)
+        {
+            var createdBook = await _bookService.AddBookAsync(book);
+            return CreatedAtAction(nameof(GetBookById), new { id = createdBook.UId }, createdBook);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<LibraryManagementSystem.Models.Book>> GetBookById(string id)
+        {
+            var book = await _bookService.GetBookByIdAsync(id);
+
+            if (book == null)
+            {
+                return NotFound();
+            }
+
+            return book;
+        }
+
+        [HttpGet("byname/{name}")]
+        public async Task<ActionResult<IEnumerable<LibraryManagementSystem.Models.Book>>> GetBooksByName(string name)
+        {
+            var books = await _bookService.GetBooksByNameAsync(name);
+            return Ok(books);
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<LibraryManagementSystem.Models.Book>>> GetAllBooks()
+        {
+            var books = await _bookService.GetAllBooksAsync();
+            return Ok(books);
+        }
+
+        [HttpGet("available")]
+        public async Task<ActionResult<IEnumerable<LibraryManagementSystem.Models.Book>>> GetAvailableBooks()
+        {
+            var books = await _bookService.GetAvailableBooksAsync();
+            return Ok(books);
+        }
+
+        [HttpGet("issued")]
+        public async Task<ActionResult<IEnumerable<LibraryManagementSystem.Models.Book>>> GetIssuedBooks()
+        {
+            var books = await _bookService.GetIssuedBooksAsync();
+            return Ok(books);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateBook(string id, LibraryManagementSystem.Models.Book book)
+        {
+            if (id != book.UId)
+            {
+                return BadRequest();
+            }
+
+            var updatedBook = await _bookService.UpdateBookAsync(book);
+
+            if (updatedBook == null)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+    }
+
+    [Route("api/[controller]")]
+    [ApiController]
+    public class MembersController : ControllerBase
+    {
+        private readonly LibraryManagementSystem.Services.MemberService _memberService;
+
+        public MembersController(LibraryManagementSystem.Services.MemberService memberService)
+        {
+            _memberService = memberService;
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<LibraryManagementSystem.Models.Member>> AddMember(LibraryManagementSystem.Models.Member member)
+        {
+            var createdMember = await _memberService.AddMemberAsync(member);
+            return CreatedAtAction(nameof(GetMemberById), new { id = createdMember.UId }, createdMember);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<LibraryManagementSystem.Models.Member>> GetMemberById(string id)
+        {
+            var member = await _memberService.GetMemberByIdAsync(id);
+
+            if (member == null)
+            {
+                return NotFound();
+            }
+
+            return member;
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<LibraryManagementSystem.Models.Member>>> GetAllMembers()
+        {
+            var members = await _memberService.GetAllMembersAsync();
+            return Ok(members);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateMember(string id, LibraryManagementSystem.Models.Member member)
+        {
+            if (id != member.UId)
+            {
+                return BadRequest();
+            }
+
+            var updatedMember = await _memberService.UpdateMemberAsync(member);
+
+            if (updatedMember == null)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+    }
+
+    [Route("api/[controller]")]
+    [ApiController]
+    public class IssuesController : ControllerBase
+    {
+        private readonly LibraryManagementSystem.Services.IssueService _issueService;
+
+        public IssuesController(LibraryManagementSystem.Services.IssueService issueService)
+        {
+            _issueService = issueService;
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<LibraryManagementSystem.Models.Issue>> IssueBook(LibraryManagementSystem.Models.Issue issue)
+        {
+            var createdIssue = await _issueService.IssueBookAsync(issue);
+            return CreatedAtAction(nameof(GetIssueById), new { id = createdIssue.UId }, createdIssue);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<LibraryManagementSystem.Models.Issue>> GetIssueById(string id)
+        {
+            var issue = await _issueService.GetIssueByIdAsync(id);
+
+            if (issue == null)
+            {
+                return NotFound();
+            }
+
+            return issue;
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<LibraryManagementSystem.Models.Issue>>> GetAllIssues()
+        {
+            var issues = await _issueService.GetAllIssuesAsync();
+            return Ok(issues);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateIssue(string id, LibraryManagementSystem.Models.Issue issue)
+        {
+            if (id != issue.UId)
+            {
+                return BadRequest();
+            }
+
+            var updatedIssue = await _issueService.UpdateIssueAsync(issue);
+
+            if (updatedIssue == null)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+    }
+}
+
+// Program
+namespace LibraryManagementSystem
+{
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+            CreateHostBuilder(args).Build().Run();
+        }
+
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseStartup<Startup>();
+                });
+    }
+
+    public class Startup
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddDbContext<LibraryManagementSystem.Data.LibraryContext>(options =>
+                options.UseInMemoryDatabase("LibraryDB"));
+            services.AddScoped<LibraryManagementSystem.Services.BookService>();
+            services.AddScoped<LibraryManagementSystem.Services.MemberService>();
+            services.AddScoped<LibraryManagementSystem.Services.IssueService>();
+            services.AddControllers();
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+        }
+    }
+}
